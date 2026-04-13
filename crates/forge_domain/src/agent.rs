@@ -243,10 +243,7 @@ impl Agent {
     ///
     /// # Returns
     /// The agent with a safe token_threshold configured
-    pub fn compaction_threshold(
-        mut self,
-        selected_model: Option<&Model>,
-    ) -> Self {
+    pub fn compaction_threshold(mut self, selected_model: Option<&Model>) -> Self {
         // Get context window from model, or use a sensible default (128K)
         const DEFAULT_CONTEXT_WINDOW: usize = 128_000;
         const SAFETY_MARGIN_PERCENT: usize = 70; // Use 70% of context window
@@ -373,7 +370,8 @@ mod tests {
 
     /// BUG 1: compaction_threshold returns early when token_threshold is None,
     /// failing to set a default threshold based on the model's context window.
-    /// This causes agents to never trigger compaction, leading to context_length_exceeded errors.
+    /// This causes agents to never trigger compaction, leading to
+    /// context_length_exceeded errors.
     #[test]
     fn test_compaction_threshold_should_set_default_when_token_threshold_is_none() {
         // Agent with NO token_threshold set (default Compact)
@@ -389,8 +387,8 @@ mod tests {
 
         let actual = fixture.compaction_threshold(Some(&selected_model));
 
-        // EXPECTED: Should set default threshold to 70% of context window (128000 * 0.7 = 89600)
-        // ACTUAL BUG: Returns early with token_threshold still as None
+        // EXPECTED: Should set default threshold to 70% of context window (128000 * 0.7
+        // = 89600) ACTUAL BUG: Returns early with token_threshold still as None
         let expected_threshold = Some(89_600);
         assert_eq!(
             actual.compact.token_threshold, expected_threshold,
@@ -399,10 +397,11 @@ mod tests {
         );
     }
 
-    /// BUG 2: With default token_threshold of 100000 and codex-spark's 128000 window,
-    /// the threshold leaves only 28K headroom. When context grows to ~110K tokens,
-    /// compaction won't trigger (below 100K threshold), but the API call will fail
-    /// because the context (110K + tool outputs) exceeds 128K limit.
+    /// BUG 2: With default token_threshold of 100000 and codex-spark's 128000
+    /// window, the threshold leaves only 28K headroom. When context grows
+    /// to ~110K tokens, compaction won't trigger (below 100K threshold),
+    /// but the API call will fail because the context (110K + tool outputs)
+    /// exceeds 128K limit.
     #[test]
     fn test_compaction_threshold_insufficient_headroom_for_codex_spark() {
         // Simulates the embedded default config: token_threshold = 100000
@@ -418,13 +417,14 @@ mod tests {
         let actual = fixture.compaction_threshold(Some(&selected_model));
 
         // The current logic keeps 100000 because 100000 < 128000
-        // But this leaves only 28000 tokens of headroom for tool outputs and new messages
-        // When context is at 105000 tokens, compaction won't trigger (below 100K threshold)
-        // But adding tool outputs (5000 tokens) + new user message (2000 tokens) = 112000
-        // API request with 112000 tokens succeeds
-        // Next turn: context at 112000, still below 100K threshold
-        // Adding more tool outputs: 112000 + 20000 = 132000 > 128000 limit → context_length_exceeded!
-        
+        // But this leaves only 28000 tokens of headroom for tool outputs and new
+        // messages When context is at 105000 tokens, compaction won't trigger
+        // (below 100K threshold) But adding tool outputs (5000 tokens) + new
+        // user message (2000 tokens) = 112000 API request with 112000 tokens
+        // succeeds Next turn: context at 112000, still below 100K threshold
+        // Adding more tool outputs: 112000 + 20000 = 132000 > 128000 limit →
+        // context_length_exceeded!
+
         // EXPECTED: Threshold should be capped to provide safety margin (70% = 89600)
         // ACTUAL BUG: Threshold stays at 100000, causing eventual overflow
         let expected_safe_threshold = Some(89_600);
@@ -437,7 +437,8 @@ mod tests {
     }
 
     /// BUG 3: Agent with no compact config and no model info should still work,
-    /// but currently compaction_threshold does nothing and context grows unbounded.
+    /// but currently compaction_threshold does nothing and context grows
+    /// unbounded.
     #[test]
     fn test_compaction_threshold_no_model_context_length_should_still_set_default() {
         // Agent with no compact config
@@ -452,9 +453,9 @@ mod tests {
 
         let actual = fixture.compaction_threshold(Some(&selected_model));
 
-        // EXPECTED: Should set a reasonable default threshold (e.g., 64000 for 128K default window)
-        // or at least set SOME threshold to prevent unbounded growth
-        // ACTUAL BUG: Returns early with token_threshold still as None
+        // EXPECTED: Should set a reasonable default threshold (e.g., 64000 for 128K
+        // default window) or at least set SOME threshold to prevent unbounded
+        // growth ACTUAL BUG: Returns early with token_threshold still as None
         assert!(
             actual.compact.token_threshold.is_some(),
             "BUG: compaction_threshold should set a default threshold even when model context_length is unknown. \

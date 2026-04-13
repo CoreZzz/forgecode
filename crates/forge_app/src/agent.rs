@@ -234,13 +234,16 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    /// Tests the current behavior: agent compact settings take priority over workflow config.
-    /// 
-    /// CURRENT BEHAVIOR: When agent has compact settings, they override workflow settings.
-    /// This means user's .forge.toml compact settings are ignored if agent has ANY compact config.
-    /// 
-    /// Note: The apply_config comment says "Agent settings take priority over workflow settings",
-    /// which is implemented via the merge() call that overwrites workflow values with agent values.
+    /// Tests the current behavior: agent compact settings take priority over
+    /// workflow config.
+    ///
+    /// CURRENT BEHAVIOR: When agent has compact settings, they override
+    /// workflow settings. This means user's .forge.toml compact settings
+    /// are ignored if agent has ANY compact config.
+    ///
+    /// Note: The apply_config comment says "Agent settings take priority over
+    /// workflow settings", which is implemented via the merge() call that
+    /// overwrites workflow values with agent values.
     #[test]
     fn test_compact_agent_settings_take_priority_over_workflow_config() {
         use forge_config::Percentage;
@@ -256,13 +259,14 @@ mod tests {
 
         // Agent with default compact config - retention_window=0 from Default
         let agent = fixture_agent();
-        
+
         let actual = agent.apply_config(&config).compact;
 
-        // CURRENT BEHAVIOR: Due to merge order (workflow_compact merged with agent.compact),
-        // agent's retention_window=0 overwrites workflow's 10
-        // This is the documented behavior: "Agent settings take priority over workflow settings"
-        
+        // CURRENT BEHAVIOR: Due to merge order (workflow_compact merged with
+        // agent.compact), agent's retention_window=0 overwrites workflow's 10
+        // This is the documented behavior: "Agent settings take priority over workflow
+        // settings"
+
         // Agent default has retention_window=0, which overwrites workflow's 10
         assert_eq!(
             actual.retention_window, 0,
@@ -270,19 +274,21 @@ mod tests {
              This is the CURRENT behavior per apply_config comment. \
              If user wants workflow settings to apply, agent should have no compact config set."
         );
-        
+
         // Agent default has token_threshold=None, workflow's 80000 should apply
         assert_eq!(
-            actual.token_threshold, Some(80000),
+            actual.token_threshold,
+            Some(80000),
             "Workflow token_threshold applies because agent default has None"
         );
     }
 
     /// Tests the current behavior when agent has partial compact config:
     /// those agent values override workflow values.
-    /// 
-    /// CURRENT BEHAVIOR: If agent sets ANY compact field, that value wins over workflow config.
-    /// Only fields where agent has None will get workflow values.
+    ///
+    /// CURRENT BEHAVIOR: If agent sets ANY compact field, that value wins over
+    /// workflow config. Only fields where agent has None will get workflow
+    /// values.
     #[test]
     fn test_compact_partial_agent_settings_override_workflow_values() {
         use forge_config::Percentage;
@@ -299,9 +305,7 @@ mod tests {
         let config = ForgeConfig::default().compact(workflow_compact);
 
         // Agent with PARTIAL compact config (only retention_window set to 5)
-        let agent = fixture_agent().compact(
-            DomainCompact::new().retention_window(5_usize)
-        );
+        let agent = fixture_agent().compact(DomainCompact::new().retention_window(5_usize));
 
         let actual = agent.apply_config(&config).compact;
 
@@ -315,11 +319,13 @@ mod tests {
 
         // Fields where agent had None get workflow values
         assert_eq!(
-            actual.token_threshold, Some(90000),
+            actual.token_threshold,
+            Some(90000),
             "Workflow token_threshold applies (agent had None)"
         );
         assert_eq!(
-            actual.turn_threshold, Some(20),
+            actual.turn_threshold,
+            Some(20),
             "Workflow turn_threshold applies (agent had None)"
         );
     }
