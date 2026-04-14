@@ -200,7 +200,7 @@ impl<F: FileInfoInfra + EnvironmentInfra<Config = ForgeConfig> + DirectoryReader
 /// Returns `false` for agents that are disabled by a feature flag in the
 /// configuration, `true` for all others.
 fn filter_agent(def: &AgentDefinition, config: &ForgeConfig) -> bool {
-    if def.id.as_str() == forge_domain::AgentId::SAGE.as_str() && !config.deep_research {
+    if def.id.as_str() == forge_domain::AgentId::SAGE.as_str() && !config.research_subagent {
         return false;
     }
     true

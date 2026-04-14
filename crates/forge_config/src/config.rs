@@ -287,7 +287,7 @@ pub struct ForgeConfig {
     /// When set to `true`, the Sage agent is added to the agent list and
     /// the `:sage` app command is enabled. Defaults to `false`.
     #[serde(default)]
-    pub deep_research: bool,
+    pub research_subagent: bool,
 }
 
 impl ForgeConfig {
