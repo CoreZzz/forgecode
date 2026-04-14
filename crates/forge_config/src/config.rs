@@ -287,7 +287,7 @@ pub struct ForgeConfig {
     /// sub-agents, and the `sage` research-only agent tool is removed.
     /// When false the `task` tool is disabled and `sage` is available instead.
     #[serde(default)]
-    pub enable_subagents: bool,
+    pub subagents: bool,
 }
 
 impl ForgeConfig {

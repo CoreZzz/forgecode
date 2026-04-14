@@ -47,23 +47,22 @@ impl<I: FileInfoInfra + EnvironmentInfra<Config = ForgeConfig> + DirectoryReader
     /// Load all agent definitions from all available sources with conflict
     /// resolution.
     async fn load_agents(&self) -> anyhow::Result<Vec<AgentDefinition>> {
-        let config = self.infra.get_config()?;
-        self.load_all_agents(&config).await
+        self.load_all_agents().await
     }
 
     /// Load all agent definitions from all available sources
-    async fn load_all_agents(&self, config: &ForgeConfig) -> anyhow::Result<Vec<AgentDefinition>> {
+    async fn load_all_agents(&self) -> anyhow::Result<Vec<AgentDefinition>> {
         // Load built-in agents (no path - will display as "BUILT IN")
-        let mut agents = self.init_default(config).await?;
+        let mut agents = self.init_default().await?;
 
         // Load custom agents from global directory
         let dir = self.infra.get_environment().agent_path();
-        let custom_agents = self.init_agent_dir(&dir, config).await?;
+        let custom_agents = self.init_agent_dir(&dir).await?;
         agents.extend(custom_agents);
 
         // Load custom agents from CWD
         let dir = self.infra.get_environment().agent_cwd_path();
-        let cwd_agents = self.init_agent_dir(&dir, config).await?;
+        let cwd_agents = self.init_agent_dir(&dir).await?;
         agents.extend(cwd_agents);
 
         // Handle agent ID conflicts by keeping the last occurrence
@@ -71,7 +70,8 @@ impl<I: FileInfoInfra + EnvironmentInfra<Config = ForgeConfig> + DirectoryReader
         Ok(resolve_agent_conflicts(agents))
     }
 
-    async fn init_default(&self, config: &ForgeConfig) -> anyhow::Result<Vec<AgentDefinition>> {
+    async fn init_default(&self) -> anyhow::Result<Vec<AgentDefinition>> {
+        let config = self.infra.get_config()?;
         parse_agent_iter(
             [
                 ("forge", include_str!("agents/forge.md")),
@@ -80,15 +80,15 @@ impl<I: FileInfoInfra + EnvironmentInfra<Config = ForgeConfig> + DirectoryReader
             ]
             .into_iter()
             .map(|(name, content)| (name.to_string(), content.to_string())),
-            config,
+            &config,
         )
     }
 
     async fn init_agent_dir(
         &self,
         dir: &std::path::Path,
-        config: &ForgeConfig,
     ) -> anyhow::Result<Vec<AgentDefinition>> {
+        let config = self.infra.get_config()?;
         if !self.infra.exists(dir).await? {
             return Ok(vec![]);
         }
@@ -102,7 +102,7 @@ impl<I: FileInfoInfra + EnvironmentInfra<Config = ForgeConfig> + DirectoryReader
 
         let mut agents = Vec::new();
         for (path, content) in files {
-            let mut agent = apply_subagent_tool_config(parse_agent_file(&content)?, config)
+            let mut agent = apply_subagent_tool_config(parse_agent_file(&content)?, &config)
                 .with_context(|| format!("Failed to parse agent: {}", path.display()))?;
 
             // Store the file path
@@ -165,7 +165,7 @@ fn apply_subagent_tool_config(
 
     tools.retain(|tool| !matches!(tool.as_str(), "task" | "sage"));
 
-    let delegated_tool = if config.enable_subagents {
+    let delegated_tool = if config.subagents {
         ToolName::new("task")
     } else {
         ToolName::new("sage")
@@ -283,7 +283,7 @@ tools:
 ---
 Body keeps {{tool_names.read}} untouched.
 "#;
-        let config = ForgeConfig { enable_subagents: true, ..Default::default() };
+        let config = ForgeConfig { subagents: true, ..Default::default() };
 
         let actual =
             apply_subagent_tool_config(parse_agent_file(fixture).unwrap(), &config).unwrap();
@@ -308,7 +308,7 @@ tools:
 ---
 Body keeps {{tool_names.read}} untouched.
 "#;
-        let config = ForgeConfig { enable_subagents: false, ..Default::default() };
+        let config = ForgeConfig { subagents: false, ..Default::default() };
 
         let actual =
             apply_subagent_tool_config(parse_agent_file(fixture).unwrap(), &config).unwrap();
@@ -349,7 +349,7 @@ Body keeps {{tool_names.read}} untouched.
             "parse_agent_file_preserves_runtime_user_prompt_variables_tools",
             apply_subagent_tool_config(
                 actual,
-                &ForgeConfig { enable_subagents: true, ..Default::default() }
+                &ForgeConfig { subagents: true, ..Default::default() }
             )
             .unwrap()
             .tools
