@@ -2,18 +2,21 @@ use std::future::Future;
 use std::sync::Arc;
 
 use anyhow::Result;
-use dashmap::DashMap;
 use forge_app::ConversationService;
 use forge_app::domain::{Conversation, ConversationId};
 use forge_domain::ConversationRepository;
 use tokio::sync::Mutex;
 
-/// Service for managing conversations, including creation, retrieval, and
-/// updates
+/// Service for managing conversations with serialized database writes to prevent
+/// SQLite contention. SQLite only allows one writer at a time, so all write
+/// operations are serialized at the service layer to prevent pool exhaustion.
 #[derive(Clone)]
 pub struct ForgeConversationService<S> {
     conversation_repository: Arc<S>,
-    conversation_lock_cache: Arc<DashMap<ConversationId, Arc<Mutex<()>>>>,
+    /// Global write lock to serialize all database writes.
+    /// SQLite only allows one writer at a time, so we queue all writes
+    /// to prevent pool contention when multiple tasks try to write concurrently.
+    write_lock: Arc<Mutex<()>>,
 }
 
 impl<S: ConversationRepository> ForgeConversationService<S> {
@@ -21,26 +24,21 @@ impl<S: ConversationRepository> ForgeConversationService<S> {
     pub fn new(repo: Arc<S>) -> Self {
         Self {
             conversation_repository: repo,
-            conversation_lock_cache: Arc::new(DashMap::new()),
+            write_lock: Arc::new(Mutex::new(())),
         }
     }
 
-    async fn run_serialized_write<F, Fut, T>(
-        &self,
-        conversation_id: ConversationId,
-        operation: F,
-    ) -> Result<T>
+    /// Runs a write operation serialized behind a global lock.
+    /// 
+    /// This prevents multiple concurrent writes from exhausting the connection pool
+    /// while waiting for SQLite's single writer lock.
+    async fn run_serialized_write<F, Fut, T>(&self, operation: F) -> Result<T>
     where
         F: FnOnce() -> Fut + Send,
         Fut: Future<Output = Result<T>> + Send,
         T: Send,
     {
-        let conversation_lock = self
-            .conversation_lock_cache
-            .entry(conversation_id)
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone();
-        let _guard = conversation_lock.lock().await;
+        let _guard = self.write_lock.lock().await;
         operation().await
     }
 }
@@ -52,7 +50,7 @@ impl<S: ConversationRepository> ConversationService for ForgeConversationService
         F: FnOnce(&mut Conversation) -> T + Send,
         T: Send,
     {
-        self.run_serialized_write(*id, || async {
+        self.run_serialized_write(|| async {
             let mut conversation = self
                 .conversation_repository
                 .get_conversation(id)
@@ -72,7 +70,7 @@ impl<S: ConversationRepository> ConversationService for ForgeConversationService
     }
 
     async fn upsert_conversation(&self, conversation: Conversation) -> Result<()> {
-        self.run_serialized_write(conversation.id, || async {
+        self.run_serialized_write(|| async {
             self.conversation_repository
                 .upsert_conversation(conversation)
                 .await?;
@@ -92,7 +90,7 @@ impl<S: ConversationRepository> ConversationService for ForgeConversationService
     }
 
     async fn delete_conversation(&self, conversation_id: &ConversationId) -> Result<()> {
-        self.run_serialized_write(*conversation_id, || async {
+        self.run_serialized_write(|| async {
             self.conversation_repository
                 .delete_conversation(conversation_id)
                 .await
@@ -186,7 +184,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_upsert_conversation_serializes_same_conversation_id() -> Result<()> {
+    async fn test_global_write_serialization_prevents_overlapping_writes() -> Result<()> {
+        // Test that ALL writes are serialized, not just same-conversation writes
+        // This is critical because SQLite only allows one writer at a time
+        let repository = Arc::new(RecordingConversationRepository::new());
+        let service = Arc::new(ForgeConversationService::new(repository.clone()));
+
+        let conversation1 = Conversation::new(ConversationId::generate()).title("First".to_string());
+        let conversation2 = Conversation::new(ConversationId::generate()).title("Second".to_string());
+
+        // Spawn two tasks writing DIFFERENT conversations concurrently
+        let service1 = service.clone();
+        let task1 = tokio::spawn(async move { service1.upsert_conversation(conversation1).await });
+
+        let service2 = service.clone();
+        let task2 = tokio::spawn(async move { service2.upsert_conversation(conversation2).await });
+
+        task1.await??;
+        task2.await??;
+
+        // With global serialization, no two writes should overlap
+        let actual = repository.overlapping_upserts().await;
+        let expected = Vec::<ConversationId>::new();
+        assert_eq!(actual, expected, "Different-conversation writes should not overlap");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_same_conversation_writes_serialized() -> Result<()> {
         let fixture = Conversation::new(ConversationId::generate()).title("Serialized".to_string());
         let repository = Arc::new(RecordingConversationRepository::new());
         let service = Arc::new(ForgeConversationService::new(repository.clone()));
