@@ -3,37 +3,44 @@ source: crates/forge_domain/src/tools/catalog.rs
 expression: tools
 ---
 {
-  "title": "FSRead",
   "type": "object",
   "properties": {
-    "end_line": {
-      "description": "The line number to stop reading at (inclusive). Only provide if the file\nis too large to read at once",
-      "type": "integer",
-      "format": "int32",
-      "nullable": true
-    },
     "file_path": {
-      "description": "The absolute path to the file to read",
+      "description": "Absolute path to the file to read.",
       "type": "string"
+    },
+    "range": {
+      "description": "Optional line range for partial reads.",
+      "type": "object",
+      "properties": {
+        "end_line": {
+          "description": "Inclusive 1-based last line.",
+          "type": "integer",
+          "format": "int32",
+          "nullable": true
+        },
+        "start_line": {
+          "description": "1-based first line.",
+          "type": "integer",
+          "format": "int32",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "nullable": true
     },
     "show_line_numbers": {
       "description": "If true, prefixes each line with its line index (starting at 1).\nDefaults to true.",
       "type": "boolean",
       "default": true
-    },
-    "start_line": {
-      "description": "The line number to start reading from starting from 1 not 0. Only\nprovide if the file is too large to read at once",
-      "type": "integer",
-      "format": "int32",
-      "nullable": true
     }
   },
+  "additionalProperties": false,
   "required": [
     "file_path"
   ]
 }
 {
-  "title": "FSWrite",
   "type": "object",
   "properties": {
     "content": {
@@ -55,7 +62,6 @@ expression: tools
   ]
 }
 {
-  "title": "FSSearch",
   "type": "object",
   "properties": {
     "-A": {
@@ -144,7 +150,6 @@ expression: tools
   ]
 }
 {
-  "title": "SemanticSearch",
   "type": "object",
   "properties": {
     "queries": {
@@ -175,7 +180,6 @@ expression: tools
   ]
 }
 {
-  "title": "FSRemove",
   "type": "object",
   "properties": {
     "path": {
@@ -188,7 +192,6 @@ expression: tools
   ]
 }
 {
-  "title": "FSPatch",
   "type": "object",
   "properties": {
     "file_path": {
@@ -216,7 +219,6 @@ expression: tools
   ]
 }
 {
-  "title": "FSMultiPatch",
   "type": "object",
   "properties": {
     "edits": {
@@ -257,7 +259,6 @@ expression: tools
   ]
 }
 {
-  "title": "FSUndo",
   "type": "object",
   "properties": {
     "path": {
@@ -270,7 +271,6 @@ expression: tools
   ]
 }
 {
-  "title": "Shell",
   "type": "object",
   "properties": {
     "command": {
@@ -305,7 +305,6 @@ expression: tools
   ]
 }
 {
-  "title": "NetFetch",
   "description": "Input type for the net fetch tool",
   "type": "object",
   "properties": {
@@ -324,7 +323,6 @@ expression: tools
   ]
 }
 {
-  "title": "Followup",
   "type": "object",
   "properties": {
     "multiple": {
@@ -367,7 +365,6 @@ expression: tools
   ]
 }
 {
-  "title": "PlanCreate",
   "type": "object",
   "properties": {
     "content": {
@@ -390,7 +387,6 @@ expression: tools
   ]
 }
 {
-  "title": "SkillFetch",
   "type": "object",
   "properties": {
     "name": {
@@ -403,7 +399,6 @@ expression: tools
   ]
 }
 {
-  "title": "TodoWrite",
   "type": "object",
   "properties": {
     "todos": {
@@ -440,16 +435,14 @@ expression: tools
   ]
 }
 {
-  "title": "TodoRead",
   "type": "object"
 }
 {
-  "title": "TaskInput",
   "description": "Input structure for the Task tool - delegates work to specialized agents",
   "type": "object",
   "properties": {
     "agent_id": {
-      "description": "The ID of the specialized agent to delegate to (e.g., \"sage\", \"forge\",\n\"muse\")",
+      "description": "The ID of the specialized agent to delegate to (e.g., \"forge\", \"muse\",\n\"sage\")",
       "type": "string"
     },
     "session_id": {

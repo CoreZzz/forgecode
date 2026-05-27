@@ -53,16 +53,21 @@ impl<H: HttpInfra> OpenAIProvider<H> {
     // - `X-Title`: Sets/modifies your app's title
     fn get_headers(&self) -> Vec<(String, String)> {
         let mut headers = Vec::new();
-        if let Some(api_key) = self
-            .provider
-            .credential
-            .as_ref()
-            .map(|c| match &c.auth_details {
-                forge_domain::AuthDetails::ApiKey(key) => key.as_str(),
-                forge_domain::AuthDetails::OAuthWithApiKey { api_key, .. } => api_key.as_str(),
-                forge_domain::AuthDetails::OAuth { tokens, .. } => tokens.access_token.as_str(),
-                forge_domain::AuthDetails::GoogleAdc(token) => token.as_str(),
-            })
+        if let Some(api_key) =
+            self.provider
+                .credential
+                .as_ref()
+                .and_then(|c| match &c.auth_details {
+                    forge_domain::AuthDetails::ApiKey(key) => Some(key.as_str()),
+                    forge_domain::AuthDetails::OAuthWithApiKey { api_key, .. } => {
+                        Some(api_key.as_str())
+                    }
+                    forge_domain::AuthDetails::OAuth { tokens, .. } => {
+                        Some(tokens.access_token.as_str())
+                    }
+                    forge_domain::AuthDetails::GoogleAdc(token) => Some(token.as_str()),
+                    forge_domain::AuthDetails::AwsProfile(_) => None,
+                })
         {
             headers.push((AUTHORIZATION.to_string(), format!("Bearer {api_key}")));
         }
@@ -93,6 +98,7 @@ impl<H: HttpInfra> OpenAIProvider<H> {
                     }
                 }
                 forge_domain::AuthMethod::GoogleAdc => {}
+                forge_domain::AuthMethod::AwsProfile => {}
             });
         // Append provider-level custom headers (from provider.json config)
         if let Some(custom_headers) = &self.provider.custom_headers {
@@ -188,9 +194,10 @@ impl<H: HttpInfra> OpenAIProvider<H> {
         &self,
         model: &ModelId,
         context: ChatContext,
+        merge_system_messages: bool,
     ) -> ResultStream<ChatCompletionMessage, anyhow::Error> {
         let mut request = Request::from(context).model(model.clone());
-        let mut pipeline = ProviderPipeline::new(&self.provider);
+        let mut pipeline = ProviderPipeline::new(&self.provider, merge_system_messages);
         request = pipeline.transform(request);
 
         let url = self.provider.url.clone();
@@ -300,8 +307,9 @@ impl<T: HttpInfra> OpenAIProvider<T> {
         &self,
         model: &ModelId,
         context: ChatContext,
+        merge_system_messages: bool,
     ) -> ResultStream<ChatCompletionMessage, anyhow::Error> {
-        self.inner_chat(model, context).await
+        self.inner_chat(model, context, merge_system_messages).await
     }
 
     pub async fn models(&self) -> Result<Vec<forge_app::domain::Model>> {
@@ -338,11 +346,14 @@ impl<F: HttpInfra + EnvironmentInfra<Config = forge_config::ForgeConfig> + 'stat
         context: ChatContext,
         provider: Provider<Url>,
     ) -> ResultStream<ChatCompletionMessage, anyhow::Error> {
-        let retry_config = self.infra.get_config()?.retry.unwrap_or_default();
+        let config = self.infra.get_config()?;
+
+        let retry_config = config.retry.unwrap_or_default();
+        let merge_system_messages = config.merge_system_messages;
         let provider_id = provider.id.clone();
         let provider_client = OpenAIProvider::new(provider, self.infra.clone());
         let stream = provider_client
-            .chat(model_id, context)
+            .chat(model_id, context, merge_system_messages)
             .await
             .map_err(|e| into_retry(e, &retry_config))?;
 
@@ -372,8 +383,8 @@ mod tests {
     use forge_app::HttpInfra;
     use forge_app::domain::{Provider, ProviderId, ProviderResponse};
     use forge_app::dto::openai::{ContentPart, ImageUrl, Message, MessageContent, Role};
+    use forge_eventsource::EventSource;
     use reqwest::header::HeaderMap;
-    use reqwest_eventsource::EventSource;
     use url::Url;
 
     use super::*;
