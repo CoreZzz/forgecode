@@ -903,6 +903,208 @@ mod tests {
     }
 
     #[test]
+    fn test_neuralwatt_config() {
+        let configs = get_provider_configs();
+        let config = configs
+            .iter()
+            .find(|c| c.id == ProviderId::NEURALWATT)
+            .unwrap();
+        assert_eq!(config.id, ProviderId::NEURALWATT);
+        assert_eq!(config.api_key_vars, Some("NEURALWATT_API_KEY".to_string()));
+        assert!(config.url_param_vars.is_empty());
+        assert_eq!(config.response_type, Some(ProviderResponse::OpenAI));
+        assert_eq!(
+            config.url.as_str(),
+            "https://api.neuralwatt.com/v1/chat/completions"
+        );
+        // Neuralwatt exposes a non-standard /models schema, so models are
+        // hardcoded in provider.json instead of fetched from the URL.
+        match config.models.as_ref().expect("models should be present") {
+            Models::Hardcoded(models) => {
+                assert!(
+                    models.iter().any(|m| m.id.as_str() == "glm-5.2"),
+                    "expected glm-5.2 to be present in hardcoded models"
+                );
+                assert!(
+                    models.iter().any(|m| m.id.as_str() == "qwen3.5-397b"),
+                    "expected qwen3.5-397b to be present in hardcoded models"
+                );
+                assert!(
+                    models.iter().any(|m| m.id.as_str() == "glm-5.2-flex"),
+                    "expected glm-5.2-flex to be present in hardcoded models"
+                );
+                assert!(
+                    models
+                        .iter()
+                        .any(|m| m.id.as_str() == "kimi-k2.7-code-flex"),
+                    "expected kimi-k2.7-code-flex to be present in hardcoded models"
+                );
+            }
+            other => panic!("expected hardcoded models, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_orca_router_config() {
+        let configs = get_provider_configs();
+        let config = configs
+            .iter()
+            .find(|c| c.id == ProviderId::ORCA_ROUTER)
+            .unwrap();
+        assert_eq!(config.id, ProviderId::ORCA_ROUTER);
+        assert_eq!(config.api_key_vars, Some("ORCAROUTER_API_KEY".to_string()));
+        assert!(config.url_param_vars.is_empty());
+        assert_eq!(config.response_type, Some(ProviderResponse::OpenAI));
+        assert_eq!(
+            config.url.as_str(),
+            "https://api.orcarouter.ai/v1/chat/completions"
+        );
+        match config.models.as_ref().expect("models should be present") {
+            Models::Url(model_url) => {
+                assert_eq!(model_url, "https://api.orcarouter.ai/v1/models");
+            }
+            other => panic!("expected URL-driven models, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_meta_config() {
+        let configs = get_provider_configs();
+        let config = configs.iter().find(|c| c.id == ProviderId::META).unwrap();
+        assert_eq!(config.id, ProviderId::META);
+        assert_eq!(config.api_key_vars, Some("META_API_KEY".to_string()));
+        assert!(config.url_param_vars.is_empty());
+        assert_eq!(
+            config.response_type,
+            Some(ProviderResponse::OpenAIResponses)
+        );
+        assert_eq!(config.url.as_str(), "https://api.meta.ai/v1/responses");
+
+        match config.models.as_ref().expect("models should be present") {
+            Models::Hardcoded(models) => {
+                let model = models
+                    .iter()
+                    .find(|m| m.id.as_str() == "muse-spark-1.1")
+                    .expect("muse-spark-1.1 should be present in hardcoded models");
+                assert_eq!(
+                    model.context_length,
+                    Some(1048576),
+                    "muse-spark-1.1 should have 1048576 context length"
+                );
+                assert_eq!(
+                    model.tools_supported,
+                    Some(true),
+                    "muse-spark-1.1 should support tools"
+                );
+                assert_eq!(
+                    model.supports_parallel_tool_calls,
+                    Some(true),
+                    "muse-spark-1.1 should support parallel tool calls"
+                );
+                assert_eq!(
+                    model.supports_reasoning,
+                    Some(true),
+                    "muse-spark-1.1 should support reasoning"
+                );
+                assert!(
+                    model
+                        .input_modalities
+                        .contains(&forge_app::domain::InputModality::Image),
+                    "muse-spark-1.1 should support image input"
+                );
+            }
+            other => panic!("expected hardcoded models, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_alibaba_token_plan_config() {
+        let configs = get_provider_configs();
+        let config = configs
+            .iter()
+            .find(|c| c.id == ProviderId::ALIBABA_TOKEN_PLAN)
+            .unwrap();
+        assert_eq!(config.id, ProviderId::ALIBABA_TOKEN_PLAN);
+        assert_eq!(
+            config.api_key_vars,
+            Some("ALIBABA_TOKEN_PLAN_API_KEY".to_string())
+        );
+        assert!(config.url_param_vars.is_empty());
+        assert_eq!(config.response_type, Some(ProviderResponse::OpenAI));
+        assert_eq!(
+            config.url.as_str(),
+            "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions"
+        );
+        // Alibaba Token Plan exposes an OpenAI-compatible endpoint but no
+        // capability metadata via /models, so models are hardcoded in
+        // provider.json.
+        match config.models.as_ref().expect("models should be present") {
+            Models::Hardcoded(models) => {
+                assert!(
+                    models.iter().any(|m| m.id.as_str() == "qwen3.7-max"),
+                    "expected qwen3.7-max to be present in hardcoded models"
+                );
+            }
+            other => panic!("expected hardcoded models, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_moonshot_config() {
+        let configs = get_provider_configs();
+        let config = configs
+            .iter()
+            .find(|c| c.id == ProviderId::MOONSHOT)
+            .unwrap();
+        assert_eq!(config.id, ProviderId::MOONSHOT);
+        assert_eq!(config.api_key_vars, Some("MOONSHOT_API_KEY".to_string()));
+        assert!(config.url_param_vars.is_empty());
+        assert_eq!(config.response_type, Some(ProviderResponse::OpenAI));
+        assert_eq!(
+            config.url.as_str(),
+            "https://api.moonshot.ai/v1/chat/completions"
+        );
+        // Moonshot's /models endpoint omits capability metadata (modalities,
+        // reasoning, tool support), so models are hardcoded in provider.json.
+        match config.models.as_ref().expect("models should be present") {
+            Models::Hardcoded(models) => {
+                assert!(
+                    models.iter().any(|m| m.id.as_str() == "kimi-k3"),
+                    "expected kimi-k3 to be present in hardcoded models"
+                );
+            }
+            other => panic!("expected hardcoded models, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_kimi_coding_config() {
+        let configs = get_provider_configs();
+        let config = configs
+            .iter()
+            .find(|c| c.id == ProviderId::KIMI_CODING)
+            .unwrap();
+        assert_eq!(config.id, ProviderId::KIMI_CODING);
+        assert_eq!(config.api_key_vars, Some("KIMI_API_KEY".to_string()));
+        assert_eq!(config.response_type, Some(ProviderResponse::OpenAI));
+        assert_eq!(
+            config.url.as_str(),
+            "https://api.kimi.com/coding/v1/chat/completions"
+        );
+        // Kimi Code's /models endpoint omits capability metadata, so models are
+        // hardcoded using the platform's canonical model IDs (k3, etc.).
+        match config.models.as_ref().expect("models should be present") {
+            Models::Hardcoded(models) => {
+                assert!(
+                    models.iter().any(|m| m.id.as_str() == "k3"),
+                    "expected k3 to be present in hardcoded models"
+                );
+            }
+            other => panic!("expected hardcoded models, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn test_provider_entry_with_static_models_converts_to_hardcoded() {
         let model = forge_domain::Model::new("Qwen3.6-35B-A3b-q3-mlx")
             .name("Qwen3.5-35B".to_string())
